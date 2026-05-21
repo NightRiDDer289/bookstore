@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from product.models import Product
+from order.models import Order
 from product.serializers import ProductSerializer
 
 class OrderSerializer(serializers.ModelSerializer):
@@ -12,5 +12,5 @@ class OrderSerializer(serializers.ModelSerializer):
     return total
 
   class Meta:
-    model = Product
+    model = Order
     fields = ['product', 'total']
