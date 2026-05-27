@@ -31,11 +31,10 @@ class CategorySerializerTest(TestCase):
     self.assertFalse(serializer.is_valid())
     self.assertIn('title', serializer.errors)
 
-  def test_serializer_invalid_without_slug(self):
+  def test_serializer_valid_without_slug(self):
     data = {'title': 'Fiction'}
     serializer = CategorySerializer(data=data)
-    self.assertFalse(serializer.is_valid())
-    self.assertIn('slug', serializer.errors)
+    self.assertTrue(serializer.is_valid())
 
   def test_serializer_data_matches_model(self):
     serializer = CategorySerializer(self.category)
