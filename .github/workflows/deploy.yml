@@ -1,7 +1,6 @@
 name: Deploy to Render
 
-on:
-  workflow_dispatch:
+on: [push]
 
 jobs:
   test:
