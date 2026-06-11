@@ -9,13 +9,24 @@ jobs:
       - name: Trigger deploy on Render
         id: trigger_deploy
         run: |
-          RESPONSE=$(curl -s -X POST \
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
             "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/deploys" \
             -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
             -H "Content-Type: application/json" \
-            -d '{"clearCache": false}')
-          echo "response=$RESPONSE"
-          DEPLOY_ID=$(echo "$RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin)['deploy']['id'])")
+            -d '{"clearCache": "do_not_clear"}')
+
+          HTTP_STATUS=$(echo "$RESPONSE" | tail -n1)
+          BODY=$(echo "$RESPONSE" | head -n-1)
+
+          echo "HTTP Status: $HTTP_STATUS"
+          echo "Response: $BODY"
+
+          if [ "$HTTP_STATUS" != "201" ]; then
+            echo "Erro ao acionar deploy. Verifique os secrets RENDER_API_KEY e RENDER_SERVICE_ID."
+            exit 1
+          fi
+
+          DEPLOY_ID=$(echo "$BODY" | python3 -c "import sys, json; print(json.load(sys.stdin)['id'])")
           echo "deploy_id=$DEPLOY_ID" >> "$GITHUB_OUTPUT"
 
       - name: Aguardar conclusão do deploy
@@ -27,7 +38,7 @@ jobs:
             STATUS=$(curl -s \
               "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/deploys/$DEPLOY_ID" \
               -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
-              | python3 -c "import sys, json; print(json.load(sys.stdin)['deploy']['status'])")
+              | python3 -c "import sys, json; print(json.load(sys.stdin)['status'])")
 
             echo "Status ($i/30): $STATUS"
 
