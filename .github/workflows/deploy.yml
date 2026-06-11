@@ -3,11 +3,8 @@ name: Deploy to Render
 on: [push]
 
 jobs:
-
   deploy:
     runs-on: ubuntu-latest
-    needs: test
-
     steps:
       - name: Trigger deploy on Render
         id: trigger_deploy
