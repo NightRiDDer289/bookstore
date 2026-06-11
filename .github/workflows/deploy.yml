@@ -1,0 +1,80 @@
+name: Deploy to Render
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Poetry
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install poetry
+
+      - name: Install dependencies
+        run: poetry install --no-interaction
+
+      - name: Run tests
+        run: poetry run python manage.py test
+        env:
+          SECRET_KEY: ${{ secrets.SECRET_KEY }}
+          DEBUG: 1
+          SQL_ENGINE: django.db.backends.sqlite3
+          SQL_DATABASE: ":memory:"
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: test
+
+    steps:
+      - name: Trigger deploy on Render
+        id: trigger_deploy
+        run: |
+          RESPONSE=$(curl -s -X POST \
+            "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/deploys" \
+            -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            -d '{"clearCache": false}')
+          echo "response=$RESPONSE"
+          DEPLOY_ID=$(echo "$RESPONSE" | python3 -c "import sys, json; print(json.load(sys.stdin)['deploy']['id'])")
+          echo "deploy_id=$DEPLOY_ID" >> "$GITHUB_OUTPUT"
+
+      - name: Aguardar conclusão do deploy
+        run: |
+          DEPLOY_ID="${{ steps.trigger_deploy.outputs.deploy_id }}"
+          echo "Acompanhando deploy: $DEPLOY_ID"
+
+          for i in $(seq 1 30); do
+            STATUS=$(curl -s \
+              "https://api.render.com/v1/services/${{ secrets.RENDER_SERVICE_ID }}/deploys/$DEPLOY_ID" \
+              -H "Authorization: Bearer ${{ secrets.RENDER_API_KEY }}" \
+              | python3 -c "import sys, json; print(json.load(sys.stdin)['deploy']['status'])")
+
+            echo "Status ($i/30): $STATUS"
+
+            if [ "$STATUS" = "live" ]; then
+              echo "Deploy concluído com sucesso!"
+              exit 0
+            elif [ "$STATUS" = "deactivated" ] || [ "$STATUS" = "build_failed" ] || [ "$STATUS" = "update_failed" ]; then
+              echo "Deploy falhou com status: $STATUS"
+              exit 1
+            fi
+
+            sleep 20
+          done
+
+          echo "Timeout: deploy ainda em andamento após 10 minutos."
+          exit 1
